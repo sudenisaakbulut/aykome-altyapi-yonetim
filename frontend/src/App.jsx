@@ -47,7 +47,7 @@ export default function App() {
   // Veritabanındaki başvuruları çeken fonksiyon
   const basvurulariGetir = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/basvurular`);
+      const res = await fetch(`${API_URL}/api/basvuru`);
       const data = await res.json();
       setBasvurular(data);
     } catch (err) {
