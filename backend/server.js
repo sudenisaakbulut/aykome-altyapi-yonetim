@@ -85,7 +85,20 @@ app.post('/api/basvuru', (req, res) => {
     });
   });
 });
+// Başvuru sil (DELETE)
+app.delete('/api/basvuru/:id', (req, res) => {
+  const { id } = req.params;
 
+  db.run('DELETE FROM basvurular WHERE id = ?', [id], function (err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
+    }
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Kayıt bulunamadı.' });
+    }
+    res.json({ message: 'Başvuru başarıyla silindi.' });
+  });
+});
 app.listen(PORT, () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor...`);
 });
