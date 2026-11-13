@@ -98,6 +98,26 @@ export default function App() {
     }
   };
 
+  // Başvuru silme işlemi
+  const handleDelete = async (id) => {
+    if (!window.confirm('Bu başvuruyu silmek istediğinize emin misiniz?')) return;
+
+    try {
+      const response = await fetch(`${API_URL}/api/basvuru/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        basvurulariGetir();
+      } else {
+        alert('❌ Kayıt silinemedi.');
+      }
+    } catch (error) {
+      console.error('Silme hatası:', error);
+      alert('❌ Sunucuya ulaşılamadı!');
+    }
+  };
+
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
       <header style={{ borderBottom: '2px solid #007bff', paddingBottom: '12px', marginBottom: '20px' }}>
@@ -231,6 +251,7 @@ export default function App() {
                 <th style={{ padding: '10px' }}>Koordinat</th>
                 <th style={{ padding: '10px' }}>Tarih</th>
                 <th style={{ padding: '10px' }}>Durum</th>
+                <th style={{ padding: '10px' }}>İşlem</th>
               </tr>
             </thead>
             <tbody>
@@ -253,6 +274,23 @@ export default function App() {
                     }}>
                       {b.durum}
                     </span>
+                  </td>
+                  <td style={{ padding: '10px' }}>
+                    <button
+                      onClick={() => handleDelete(b.id)}
+                      style={{
+                        backgroundColor: '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        padding: '6px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      Sil
+                    </button>
                   </td>
                 </tr>
               ))}
