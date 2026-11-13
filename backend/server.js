@@ -1,265 +1,91 @@
-import { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+const express = require('express');
+const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
 
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors());
+app.use(express.json());
+
+// SQLite veritabanı bağlantısı
+const db = new sqlite3.Database('./aykome.db', (err) => {
+  if (err) {
+    console.error('Veritabanı bağlantı hatası:', err.message);
+  } else {
+    console.log('SQLite veritabanına bağlanıldı.');
+  }
 });
 
-// Haritadan yeni nokta seçme bileşeni
-function LocationMarker({ onSelectLocation }) {
-  const [position, setPosition] = useState(null);
+// Tabloyu oluştur (yoksa)
+db.run(`
+  CREATE TABLE IF NOT EXISTS basvurular (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kurumAdi TEXT NOT NULL,
+    telefon TEXT NOT NULL,
+    kaziTuru TEXT NOT NULL,
+    enlem REAL NOT NULL,
+    boylam REAL NOT NULL,
+    aciklama TEXT,
+    tarih TEXT,
+    durum TEXT DEFAULT 'İnceleniyor'
+  )
+`);
 
-  useMapEvents({
-    click(e) {
-      setPosition(e.latlng);
-      onSelectLocation(e.latlng);
-    },
-  });
+// Ana dizin kontrolü
+app.get('/', (req, res) => {
+  res.send('AYKOME Backend API Çalışıyor!');
+});
 
-  return position === null ? null : (
-    <Marker position={position}>
-      <Popup>
-        📍 Yeni Seçilen Konum <br />
-        Enlem: {position.lat.toFixed(4)} <br />
-        Boylam: {position.lng.toFixed(4)}
-      </Popup>
-    </Marker>
-  );
-}
-
-export default function App() {
-  const [selectedPoint, setSelectedPoint] = useState(null);
-  const [basvurular, setBasvurular] = useState([]);
-  const [formData, setFormData] = useState({
-    kurumAdi: '',
-    telefon: '',
-    kaziTuru: 'Fiber İnternet',
-    aciklama: '',
-  });
-
-  const API_URL = 'https://aykome-altyapi-yonetim.onrender.com';
-
-  // Veritabanındaki başvuruları çeken fonksiyon
-  const basvurulariGetir = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/basvuru`);
-      const data = await res.json();
-      setBasvurular(data);
-    } catch (err) {
-      console.error('Veri çekme hatası:', err);
+// Tüm başvuruları listele (GET)
+app.get('/api/basvuru', (req, res) => {
+  db.all('SELECT * FROM basvurular ORDER BY id DESC', [], (err, rows) => {
+    if (err) {
+      return res.status(500).json({ error: err.message });
     }
-  };
+    res.json(rows);
+  });
+});
 
-  // Sayfa açıldığında verileri otomatik çek
-  useEffect(() => {
-    basvurulariGetir();
-  }, []);
+// Yeni başvuru kaydet (POST)
+app.post('/api/basvuru', (req, res) => {
+  const { kurumAdi, telefon, kaziTuru, koordinat, aciklama, tarih } = req.body;
 
-  // Form gönderme işlemi
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  if (!kurumAdi || !telefon || !koordinat) {
+    return res.status(400).json({ error: 'Eksik bilgi gönderildi.' });
+  }
 
-    if (!selectedPoint) {
-      alert('Lütfen haritadan bir kazı konumu seçin!');
-      return;
+  const enlem = koordinat.lat;
+  const boylam = koordinat.lng;
+  const durum = 'İnceleniyor';
+
+  const sql = `
+    INSERT INTO basvurular (kurumAdi, telefon, kaziTuru, enlem, boylam, aciklama, tarih, durum)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `;
+
+  db.run(sql, [kurumAdi, telefon, kaziTuru, enlem, boylam, aciklama, tarih, durum], function (err) {
+    if (err) {
+      return res.status(500).json({ error: err.message });
     }
 
-    const yeniBasvuru = {
-      ...formData,
-      koordinat: selectedPoint,
-      tarih: new Date().toLocaleDateString('tr-TR'),
-    };
-
-    try {
-      const response = await fetch(`${API_URL}/api/basvuru`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(yeniBasvuru),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert(`✅ ${data.message}\nKayıt ID: ${data.kayit.id}`);
-        setFormData({ kurumAdi: '', telefon: '', kaziTuru: 'Fiber İnternet', aciklama: '' });
-        setSelectedPoint(null);
-        basvurulariGetir();
-      } else {
-        alert('❌ Başvuru kaydedilemedi.');
+    res.status(201).json({
+      message: 'Kazı başvurusu başarıyla kaydedildi!',
+      kayit: {
+        id: this.lastID,
+        kurumAdi,
+        telefon,
+        kaziTuru,
+        enlem,
+        boylam,
+        aciklama,
+        tarih,
+        durum
       }
-    } catch (error) {
-      console.error('Bağlantı hatası:', error);
-      alert('❌ Backend sunucusuna ulaşılamadı!');
-    }
-  };
+    });
+  });
+});
 
-  return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{ borderBottom: '2px solid #007bff', paddingBottom: '12px', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '26px', margin: '0 0 6px 0', lineHeight: '1.2' }}>
-          AYKOME - Altyapı Koordinasyon Portalı
-        </h1>
-        <p style={{ margin: '0', color: '#555', fontSize: '15px' }}>
-          Kazı İzin Başvuruları ve Saha Takip Sistemi
-        </p>
-      </header>
-
-      {/* ÜST BÖLÜM: Harita ve Form */}
-      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '30px' }}>
-        {/* Harita */}
-        <div style={{ flex: '2', minWidth: '350px' }}>
-          <h3>Kazı Haritası (Kayıtlı Noktalar)</h3>
-          <MapContainer center={[40.98, 37.90]} zoom={11} style={{ height: '420px', width: '100%', borderRadius: '8px' }}>
-            <TileLayer
-              attribution='&copy; OpenStreetMap'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-            <LocationMarker onSelectLocation={(coords) => setSelectedPoint(coords)} />
-
-            {basvurular.map((b) => (
-              <Marker key={b.id} position={[b.enlem, b.boylam]}>
-                <Popup>
-                  <strong>{b.kurumAdi}</strong> ({b.kaziTuru})<br />
-                  <strong>Durum:</strong> {b.durum}<br />
-                  <strong>Açıklama:</strong> {b.aciklama}<br />
-                  <strong>Tarih:</strong> {b.tarih}
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
-        </div>
-
-        {/* Form */}
-        <div style={{ flex: '1', minWidth: '300px', background: '#f9f9f9', padding: '20px', borderRadius: '8px', border: '1px solid #ddd' }}>
-          <h3>Yeni Kazı Başvurusu</h3>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Kurum Adı:</label>
-              <input 
-                type="text" 
-                placeholder="Örn: Türk Telekom, EDAŞ" 
-                value={formData.kurumAdi}
-                onChange={(e) => setFormData({ ...formData, kurumAdi: e.target.value })}
-                required
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>İletişim Telefonu:</label>
-              <input 
-                type="tel" 
-                placeholder="05XX XXX XX XX" 
-                value={formData.telefon}
-                onChange={(e) => setFormData({ ...formData, telefon: e.target.value })}
-                required
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Kazı Türü:</label>
-              <select 
-                value={formData.kaziTuru}
-                onChange={(e) => setFormData({ ...formData, kaziTuru: e.target.value })}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
-              >
-                <option value="Fiber İnternet">Fiber İnternet</option>
-                <option value="Su / Kanalizasyon">Su / Kanalizasyon</option>
-                <option value="Elektrik Hat">Elektrik Hat</option>
-                <option value="Doğalgaz">Doğalgaz</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Seçilen Koordinat:</label>
-              <input 
-                type="text" 
-                readOnly 
-                value={selectedPoint ? `${selectedPoint.lat.toFixed(4)}, ${selectedPoint.lng.toFixed(4)}` : 'Haritadan tıklayın'}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', background: '#eee', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ fontSize: '13px', fontWeight: 'bold' }}>Açıklama:</label>
-              <textarea 
-                rows="2"
-                placeholder="Adres veya çalışma detayı..." 
-                value={formData.aciklama}
-                onChange={(e) => setFormData({ ...formData, aciklama: e.target.value })}
-                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <button 
-              type="submit" 
-              style={{ 
-                padding: '10px', 
-                backgroundColor: '#28a745', 
-                color: 'white', 
-                border: 'none', 
-                borderRadius: '4px', 
-                cursor: 'pointer', 
-                fontWeight: 'bold' 
-              }}
-            >
-              Başvuruyu Kaydet
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {/* ALT BÖLÜM: Veritabanı Tablosu */}
-      <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '8px', padding: '20px' }}>
-        <h3>📋 Veritabanındaki Başvuru Listesi ({basvurular.length} Kayıt)</h3>
-        {basvurular.length === 0 ? (
-          <p style={{ color: '#888' }}>Henüz kayıtlı başvuru bulunmamaktadır.</p>
-        ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#f1f5f9', borderBottom: '2px solid #cbd5e1' }}>
-                <th style={{ padding: '10px' }}>ID</th>
-                <th style={{ padding: '10px' }}>Kurum</th>
-                <th style={{ padding: '10px' }}>Tür</th>
-                <th style={{ padding: '10px' }}>Telefon</th>
-                <th style={{ padding: '10px' }}>Koordinat</th>
-                <th style={{ padding: '10px' }}>Tarih</th>
-                <th style={{ padding: '10px' }}>Durum</th>
-              </tr>
-            </thead>
-            <tbody>
-              {basvurular.map((b) => (
-                <tr key={b.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <td style={{ padding: '10px' }}>#{b.id}</td>
-                  <td style={{ padding: '10px', fontWeight: 'bold' }}>{b.kurumAdi}</td>
-                  <td style={{ padding: '10px' }}>{b.kaziTuru}</td>
-                  <td style={{ padding: '10px' }}>{b.telefon}</td>
-                  <td style={{ padding: '10px', fontSize: '12px' }}>{b.enlem?.toFixed(4)}, {b.boylam?.toFixed(4)}</td>
-                  <td style={{ padding: '10px' }}>{b.tarih}</td>
-                  <td style={{ padding: '10px' }}>
-                    <span style={{ 
-                      backgroundColor: '#fff3cd', 
-                      color: '#856404', 
-                      padding: '4px 8px', 
-                      borderRadius: '12px', 
-                      fontSize: '12px', 
-                      fontWeight: 'bold' 
-                    }}>
-                      {b.durum}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </div>
-  );
-}
+app.listen(PORT, () => {
+  console.log(`Sunucu ${PORT} portunda çalışıyor...`);
+});
