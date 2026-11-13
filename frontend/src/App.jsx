@@ -37,7 +37,7 @@ export default function App() {
   // Veritabanındaki başvuruları çeken fonksiyon
   const basvurulariGetir = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/basvuru');
+      const res = await fetch('https://aykome-altyapi-yonetim.onrender.com/api/basvurular');
       const data = await res.json();
       setBasvurular(data);
     } catch (err) {
@@ -66,7 +66,7 @@ export default function App() {
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/basvuru', {
+      const response = await fetch('/api/basvuru', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(yeniBasvuru),
