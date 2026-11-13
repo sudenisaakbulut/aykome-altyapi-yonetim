@@ -42,10 +42,12 @@ export default function App() {
     aciklama: '',
   });
 
+  const API_URL = 'https://aykome-altyapi-yonetim.onrender.com';
+
   // Veritabanındaki başvuruları çeken fonksiyon
   const basvurulariGetir = async () => {
     try {
-      const res = await fetch('https://aykome-altyapi-yonetim.onrender.com/api/basvurular');
+      const res = await fetch(`${API_URL}/api/basvurular`);
       const data = await res.json();
       setBasvurular(data);
     } catch (err) {
@@ -74,7 +76,7 @@ export default function App() {
     };
 
     try {
-      const response = await fetch('/api/basvuru', {
+      const response = await fetch(`${API_URL}/api/basvuru`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(yeniBasvuru),
@@ -86,7 +88,7 @@ export default function App() {
         alert(`✅ ${data.message}\nKayıt ID: ${data.kayit.id}`);
         setFormData({ kurumAdi: '', telefon: '', kaziTuru: 'Fiber İnternet', aciklama: '' });
         setSelectedPoint(null);
-        basvurulariGetir(); // Listeyi ve haritayı anında yenile
+        basvurulariGetir();
       } else {
         alert('❌ Başvuru kaydedilemedi.');
       }
@@ -98,9 +100,13 @@ export default function App() {
 
   return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif', maxWidth: '1200px', margin: '0 auto' }}>
-      <header style={{ borderBottom: '2px solid #007bff', paddingBottom: '10px', marginBottom: '20px' }}>
-        <h1 style={{ margin: 0, color: '#333' }}>AYKOME - Altyapı Koordinasyon Portalı</h1>
-        <p style={{ margin: '5px 0 0', color: '#666' }}>Kazı İzin Başvuruları ve Saha Takip Sistemi</p>
+      <header style={{ borderBottom: '2px solid #007bff', paddingBottom: '12px', marginBottom: '20px' }}>
+        <h1 style={{ fontSize: '26px', margin: '0 0 6px 0', lineHeight: '1.2' }}>
+          AYKOME - Altyapı Koordinasyon Portalı
+        </h1>
+        <p style={{ margin: '0', color: '#555', fontSize: '15px' }}>
+          Kazı İzin Başvuruları ve Saha Takip Sistemi
+        </p>
       </header>
 
       {/* ÜST BÖLÜM: Harita ve Form */}
@@ -113,10 +119,8 @@ export default function App() {
               attribution='&copy; OpenStreetMap'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {/* Yeni Tıklanan Nokta */}
             <LocationMarker onSelectLocation={(coords) => setSelectedPoint(coords)} />
 
-            {/* Veritabanındaki Kayıtlı Başvuruların İşaretçileri */}
             {basvurular.map((b) => (
               <Marker key={b.id} position={[b.enlem, b.boylam]}>
                 <Popup>
@@ -201,8 +205,8 @@ export default function App() {
                 color: 'white', 
                 border: 'none', 
                 borderRadius: '4px', 
-                cursor: 'pointer',
-                fontWeight: 'bold'
+                cursor: 'pointer', 
+                fontWeight: 'bold' 
               }}
             >
               Başvuruyu Kaydet
@@ -244,8 +248,8 @@ export default function App() {
                       color: '#856404', 
                       padding: '4px 8px', 
                       borderRadius: '12px', 
-                      fontSize: '12px',
-                      fontWeight: 'bold'
+                      fontSize: '12px', 
+                      fontWeight: 'bold' 
                     }}>
                       {b.durum}
                     </span>
